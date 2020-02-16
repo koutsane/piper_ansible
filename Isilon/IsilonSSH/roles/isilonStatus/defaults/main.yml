@@ -1,0 +1,6 @@
+---
+# defaults file for isilonStatus
+
+logServer: isilon822dc1
+LogDir: "/ifs/playbooks/logs"
+DateTimeStamp: "{{ansible_date_time.date}}.{{ansible_date_time.time}}"

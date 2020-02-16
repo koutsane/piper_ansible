@@ -1,0 +1,95 @@
+---
+- name: 'Include OS specific vars'
+  include_vars: "{{ ansible_os_family }}.yml"
+  no_log: true
+
+- name: 'Install packages'
+  include_tasks: "install-{{ ansible_os_family }}.yml"
+
+- name: 'Configure services'
+  template:
+    dest: "{{ conffile.dest }}"
+    src: "{{ conffile.src }}"
+    mode: 0644
+    owner: 'root'
+    group: 'root'
+  loop:
+    - {src: 'ldap.conf.j2', dest: "{{ openldap_conffile }}"}
+    - {src: 'krb5.conf.j2', dest: '/etc/krb5.conf'}
+  loop_control:
+    loop_var: 'conffile'
+
+- name: "Configure Samba for each domain"
+  template:
+    dest: "/etc/samba/smb_{{ domain.name }}.conf"
+    src: "smb.conf.j2"
+    mode: 0644
+    owner: 'root'
+    group: 'root'
+  loop: "{{ adjoin_domains }}"
+  loop_control:
+    loop_var: 'domain'
+
+- block:
+    - name: "Check AD connection with testjoin"
+      command: "timeout 5 /usr/bin/net ads testjoin -s /etc/samba/smb_{{ domain.name }}.conf"
+      changed_when: false
+      loop: "{{ adjoin_domains }}"
+      loop_control:
+        loop_var: 'domain'
+  rescue:
+    - name: "Join AD domain"
+      command: '/usr/bin/net ads join -s /etc/samba/smb_{{ domain.name }}.conf \
+        -U{{ domain.username }}%{{ domain.password }} \
+        osName="{{ ansible_distribution }}" \
+        osVer="{{ ansible_distribution_version }}" \
+        createcomputer={{ domain.computer_objects_path }}'
+      loop: "{{ adjoin_domains }}"
+      loop_control:
+        loop_var: 'domain'
+
+- name: "Configure SSSD"
+  template:
+    dest: "/etc/sssd/sssd.conf"
+    src: "sssd.conf.j2"
+    mode: 0600
+    owner: 'root'
+    group: 'root'
+  notify:
+    - reconfigure redhat pam
+    - reconfigure debian pam
+    - clear sssd cache
+
+- name: "Configure services - Common"
+  systemd:
+    name: "{{ service.name }}"
+    enabled: "{{ service.enabled }}"
+    masked: "{{ service.masked }}"
+    state: "{{ service.state }}"
+  loop:
+    - {'name':'sssd', 'enabled':'yes', 'masked':'no', 'state':'started'}
+    - {'name':'dbus', 'enabled':'yes', 'masked':'no', 'state':'started'}
+    - {'name':'systemd-logind', 'enabled':'no', 'masked':'yes', 'state':'stopped'}
+  loop_control:
+    loop_var: 'service'
+
+- name: "Configure services - OS-specific"
+  systemd:
+    name: "{{ service.name }}"
+    enabled: "{{ service.enabled }}"
+    masked: "{{ service.masked }}"
+    state: "{{ service.state }}"
+  loop: "{{ os_specific_services }}"
+  loop_control:
+    loop_var: 'service'
+  when: os_specific_services is defined
+
+- name: "Configure Sudo permissions for admin users"
+  template:
+    dest: "/etc/sudoers.d/10_linux_admins"
+    src: "sudoers_10_linux_admins"
+    mode: 0440
+    validate: "visudo -cf %s"
+    owner: 'root'
+    group: 'root'
+  when: adjoin_configure_sudo

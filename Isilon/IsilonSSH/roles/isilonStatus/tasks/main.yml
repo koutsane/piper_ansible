@@ -1,0 +1,10 @@
+---
+# tasks file for isilonStatus
+- name: connect to "{{ ansible_host }}" via SSH and issue "isi status"
+  command: "{{ isilon_cmd }}"
+  register: result
+  changed_when: "'[ ATTN]' in result.stdout"
+  notify: alert
+
+- debug:
+    msg="{{ result.stdout_lines }}"

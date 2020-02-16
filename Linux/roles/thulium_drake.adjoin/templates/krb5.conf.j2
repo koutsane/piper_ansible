@@ -1,0 +1,45 @@
+# {{ ansible_managed }}
+
+[logging]
+  default = FILE:/var/log/krb5libs.log
+  kdc = FILE:/var/log/krb5kdc.log
+  admin_server = FILE:/var/log/kadmind.log
+
+[libdefaults]
+  permitted_enctypes = {{ adjoin_kerberos_enctypes }}
+  default_realm = {{ adjoin_domains[0].name|upper }}
+
+  dns_lookup_realm = true
+  dns_lookup_kdc = true
+  ticket_lifetime = 24h
+  renew_lifetime = 7d
+  forwardable = true
+  default_tkt_enctypes = {{ adjoin_kerberos_enctypes }}
+  default_tgs_enctypes = {{ adjoin_kerberos_enctypes }}
+
+[realms]
+{% for domain in adjoin_domains %}
+  {{ domain.name|upper }} = {
+    {% for domain_controller in domain.domain_controllers %}
+kdc = {{ domain_controller }}
+    {% endfor %}
+admin_server = {{ domain.domain_controllers[0] }}
+    default_realm = {{ domain.name }}
+    }
+{% endfor %}
+
+[domain_realm]
+{% for domain in adjoin_domains %}
+  .{{ domain.name }} = {{ domain.name|upper }}
+  {{ domain.name }} = {{ domain.name|upper }}
+{% endfor %}
+
+[appdefaults]
+  pam = {
+    debug = false
+    ticket_lifetime = 36000
+    renew_lifetime = 36000
+    forwardable = true
+    krb4_convert = false
+    validate = true
+  }

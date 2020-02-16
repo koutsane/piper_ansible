@@ -1,0 +1,28 @@
+- name: Query isilon status
+  hosts: isilon
+  vars:
+    isilon_cmd: "isi status"
+    logServer: isilon822dc1
+    LogDir: "/ifs/playbooks/logs"
+    DateTimeStamp: "{{ansible_date_time.date}}.{{ansible_date_time.time}}"
+  
+  tasks:
+    - name: connect to "{{ ansible_host }}" via SSH and issue "isi status"
+      command: "{{ isilon_cmd }}" 
+      register: result
+      changed_when: "'[ ATTN]' in result.stdout"
+      notify: alert
+
+    - debug:
+        msg="{{ result.stdout_lines }}"
+
+    - name: force all notified handlers to run at this point
+      meta: flush_handlers
+
+  handlers:
+
+    - name: alert
+      copy:
+        content: "{{ result.stdout_lines | to_nice_json }}"
+        dest: "{{ LogDir }}/{{ DateTimeStamp }}.{{ inventory_hostname }}.log"
+      delegate_to: "{{ logServer }}"

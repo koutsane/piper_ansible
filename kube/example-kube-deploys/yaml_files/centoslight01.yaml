@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: centoslight01-isi-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 20Mi
+  storageClassName: isilon
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: centoslight01-dep
+  labels:
+    app: centoslight01-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: centoslight01-pod
+      app: centoslight01-app
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      name: centoslight01-pod
+      labels:
+        name: centoslight01-pod
+        app: centoslight01-app
+    spec:
+      hostAliases:
+      - ip: "192.168.11.121"
+        hostnames:
+          - "isilon82dc1"
+      - ip: "192.168.11.131"
+        hostnames:
+          - "isilon82dc2"
+      - ip: "192.168.11.80"
+        hostnames:
+          - "ad2016"
+      - ip: "192.168.11.99"
+        hostnames:
+          - "awxold"
+      - ip: "192.168.11.101"
+        hostnames:
+          - "awxdemo"
+      
+      containers:
+        - name: centoslight01
+          image: koutsane/koutsane:centoslight
+          ports:
+            - containerPort: 22
+          volumeMounts:
+            - mountPath: "/mnt/isilon"
+              name: centoslight01-vol01
+      volumes:
+        - name: centoslight01-vol01
+          persistentVolumeClaim:
+            claimName: centoslight01-isi-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: centoslight01-service
+spec:
+  type: NodePort
+  ports:
+    - targetPort: 22
+      port: 22
+      nodePort: 30001
+  selector:
+    name: centoslight01-pod
+    app: centoslight01-app

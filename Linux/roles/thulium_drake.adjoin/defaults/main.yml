@@ -1,0 +1,24 @@
+---
+# Common settings for all domains
+adjoin_sssd_homedir: '/home/%u'
+adjoin_sssd_default_shell: '/bin/bash'
+# Please note that disabling arcfour-hmac-md5 can NOT be done without some
+# work on the AD controller's side
+adjoin_kerberos_enctypes: 'aes256-cts arcfour-hmac-md5'
+
+# Configure sudo permissions for the administrative groups in this file
+adjoin_configure_sudo: false
+
+# Domains to join
+adjoin_domains:
+  - { name: 'prod.example.com',
+      workgroup: 'PROD',
+      domain_controllers: [
+        'dc1.prod.example.com',
+        'dc2.prod.example.com'
+      ],
+      ldap_base_dn: 'dc=prod,dc=example,dc=com',
+      computer_objects_path: 'SomeOU/Computers',
+      linux_admins: 'Linux Domain Admins',
+      username: 'administrator',
+      password: 'password' }

@@ -1,0 +1,48 @@
+- name: Kubernetes deploy centoslight pods with isilon PVC
+  hosts: kube-master0
+  vars:
+    srcYaml: "centoslight"
+    #### scrPath must end in "01.yaml"
+    srcPath: "./example-kube-deploys/yaml_files/{{ srcYaml }}01.yaml"
+    dest: "/root"
+    nodePortbase: 300 #supports up to 99 node port allocations starting at 30001 ending 30099
+    containers:
+      - "02"
+  
+  gather_facts: no
+  
+  become: true
+
+  tasks:
+    - name: "copy kube deplyment and services yaml file to kubernetes cluster"
+      copy:
+        src: "{{ srcPath }}"
+        dest: "{{ dest }}"
+    
+    - name: "create kube deplyment multiple pods"
+      copy:
+        remote_src: yes
+        src: "{{ dest }}/{{ srcYaml }}01.yaml"
+        dest: "{{ dest }}/{{ srcYaml }}{{ item }}.yaml"
+      with_items: "{{ containers }}"
+    
+    - name: "rename deployment, services and PVC in deplyment yaml files"
+      replace:
+        path: "{{ dest }}/{{ srcYaml }}{{ item }}.yaml"
+        regexp: "{{ srcYaml }}01"
+        replace: "{{ srcYaml }}{{ item }}"
+      with_items: "{{ containers }}"
+    
+    - name: "rename deployment, services and PVC in deplyment yaml files"
+      replace:
+        path: "{{ dest }}/{{ srcYaml }}{{ item }}.yaml"
+        regexp: "{{ nodePortbase }}01"
+        replace: "{{ nodePortbase }}{{ item }}"
+      with_items: "{{ containers }}"
+
+    - name: "create kube deplyment, services and PVC for each centoslight yaml file"
+      shell: "for i in `ls -1 {{ dest }}/{{ srcYaml }}{{ item }}.yaml`; do /usr/bin/kubectl create -f ${i} ; done"
+      with_items:
+        - "01"
+        - "{{ containers }}"
+      ignore_errors: yes

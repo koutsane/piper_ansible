@@ -1,0 +1,103 @@
+---
+- name: "Join Linux Server to AD Domain"
+  hosts: kube-con-30001
+  vars:
+    ansiblecontroller: centos7
+    adServer: "ad2019.kryptolula.local"
+    isContainer: "yes"
+    netbiosName: "{{ inventory_hostname }}"  ### REQUIRED FOR hostname longer than 15 chaacters, added this variable to smb template j2 file
+    smbconfj2: ./roles/evan.container.adjoin/templates/smb.conf.j2
+    taskMainYaml: ./roles/evan.container.adjoin/tasks/main.yml
+    RedHat_var: ./roles/evan.container.adjoin/vars/RedHat.yml
+    adjoin_domains:
+      - { name: 'kryptolula.local',
+          workgroup: 'kryptolula',
+          domain_controllers: [
+            'ad2019.kryptolula.local'
+          ],
+          ldap_base_dn: 'dc=kryptolula,dc=local',
+          computer_objects_path: 'Computers',
+          linux_admins: 'Domain Admins',
+          username: 'administrator',
+          password: 'password!23@' }
+
+  ####become: true
+
+  pre_tasks:
+
+    - name: add netbios name to smb template j2 file
+      blockinfile:
+        path: "{{ smbconfj2 }}"
+        insertafter: EOF
+        block: "  netbios name = {{ netbiosName }}"
+      delegate_to: "{{ ansiblecontroller }}"
+
+    - block: 
+      - name: install python3-apt and python-apt-common
+        apt:
+          name: python3-apt
+          state: present
+          update_cache: yes
+        when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+    
+      - name: install python-apt-common
+        apt:
+          name: python-apt-common
+          state: present
+          update_cache: yes
+        when: ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian'
+    
+      - name: ignore systemctl (systemd) errors for container targets
+        blockinfile:
+          path: "{{ taskMainYaml }}"
+          insertafter: '- name: "Configure services - Common"'
+          block: '  ignore_errors: yes'
+        delegate_to: "{{ ansiblecontroller }}"
+
+      - name: remove oddjobd from redhat installation
+        lineinfile:
+          path: "{{ RedHat_var }}"
+          regex: "  - {'name':'oddjobd', 'enabled':'yes', 'masked':'no', 'state':'started'}"
+          line: "###- {'name':'oddjobd', 'enabled':'yes', 'masked':'no', 'state':'started'}"
+        delegate_to: "{{ ansiblecontroller }}"
+    
+      when: isContainer == "yes"
+
+  roles:
+    - role: evan.container.adjoin
+
+  tasks:
+    - name: "comment out localhost uid mapping"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "ldap_id_mapping = True"
+        line: "### Disabled by Ansible ### ldap_id_mapping = True"
+
+    - name: "comment out enumerate = false"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "enumerate = false"
+        line: "### Disabled by Ansible ### enumerate = false"
+
+    - name: "comment out ignore group members"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "ignore_group_members = True"
+        line: "### Disabled by Ansible ### ignore_group_members = True"
+
+    - name: "update sssd with ad_server and other specific options"
+      blockinfile:
+        path: /etc/sssd/sssd.conf
+        insertafter: EOF
+        block: |
+          ldap_id_mapping = false
+          enumerate = true
+          ignore_group_members = false
+          ad_server = {{ adServer }}
+
+    - name: Restart sssd service node
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: sssd
+

@@ -1,0 +1,4 @@
+# {{ ansible_managed }}
+{% for domain in adjoin_domains %}
+%{{ domain.linux_admins|regex_replace(' ','\ ')|lower }} ALL=(ALL) NOPASSWD:ALL
+{% endfor %}

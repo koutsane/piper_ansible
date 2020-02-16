@@ -1,0 +1,23 @@
+---
+# Common settings for all domains
+adjoin_sssd_homedir: '/home/%u'
+adjoin_sssd_default_shell: '/bin/bash'
+# Please note that disabling arcfour-hmac-md5 can NOT be done without some
+# work on the AD controller's side
+adjoin_kerberos_enctypes: 'aes256-cts arcfour-hmac-md5'
+
+# Configure sudo permissions for the administrative groups in this file
+adjoin_configure_sudo: true 
+
+# Domains to join
+adjoin_domains:
+  - { name: 'kryptolula.local',
+      workgroup: 'kryptolula',
+      domain_controllers: [
+        'ad2019.kryptolula.local'
+      ],
+      ldap_base_dn: 'dc=kryptolula,dc=local',
+      computer_objects_path: 'Computers',
+      linux_admins: 'Domain Admins',
+      username: 'administrator',
+      password: 'password!23@' }

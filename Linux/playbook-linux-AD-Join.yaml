@@ -1,0 +1,59 @@
+---
+- name: "Join Linux Server to AD Domain"
+  hosts: kube-master0
+  vars:
+    ansiblecontroller: centos7
+    adServer: ad2019.kryptolula.local
+    adjoin_domains:
+      - { name: 'kryptolula.local',
+          workgroup: 'kryptolula',
+          domain_controllers: [
+            'ad2019.kryptolula.local'
+          ],
+          ldap_base_dn: 'dc=kryptolula,dc=local',
+          computer_objects_path: 'Computers',
+          linux_admins: 'Domain Admins',
+          username: 'administrator',
+          password: 'password!23@' }
+
+    #### Please review default variables in roles ####
+
+  ###become: true
+
+  roles:
+    - role: thulium_drake.adjoin
+
+  tasks:
+    - name: "comment out localhost uid mapping"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "ldap_id_mapping = True"
+        line: "### Disabled by Ansible ### ldap_id_mapping = True"
+
+    - name: "comment out enumerate = false"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "enumerate = false"
+        line: "### Disabled by Ansible ### enumerate = false"
+    
+    - name: "comment out ignore group members"
+      lineinfile:
+        path: /etc/sssd/sssd.conf
+        regexp: "ignore_group_members = True"
+        line: "### Disabled by Ansible ### ignore_group_members = True"
+
+    - name: "update sssd with ad_server and other specific options"
+      blockinfile:
+        path: /etc/sssd/sssd.conf
+        insertafter: EOF
+        block: |
+          ldap_id_mapping = false
+          enumerate = true
+          ignore_group_members = false
+          ad_server = {{ adServer }}
+
+    - name: Restart sssd service node
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: sssd

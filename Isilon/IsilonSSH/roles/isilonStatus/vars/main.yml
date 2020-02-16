@@ -1,0 +1,4 @@
+---
+# vars file for isilonStatus
+
+isilon_cmd: "isi status"

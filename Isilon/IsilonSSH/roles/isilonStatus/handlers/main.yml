@@ -1,0 +1,8 @@
+---
+# handlers file for isilonStatus
+
+- name: alert
+  copy:
+    content: "{{ result.stdout_lines | to_nice_json }}"
+    dest: "{{ LogDir }}/{{ DateTimeStamp }}.{{ inventory_hostname }}.log"
+  delegate_to: "{{ logServer }}"

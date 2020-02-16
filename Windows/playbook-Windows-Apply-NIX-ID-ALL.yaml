@@ -1,0 +1,47 @@
+- name: Apply NIX UIDs and GID to Windows AD users
+  hosts: windows
+  gather_facts: no
+  vars:
+    ADuserOU: "CN=Users,DC=kryptolula,DC=local"
+    UIDstart: 10001
+    PriGIDname: Domain Users
+    PriGIDnumber: 7001
+    LINUXseq: "/usr/bin/seq"
+    ignoreUser: krbtgt
+
+  tasks:
+    - name: "Get AD user list"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber | foreach {$_.Name}
+      changed_when: false
+      register: result_userADnames
+
+    - name: "Count AD users without UID"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber | foreach {$_.Name} | Measure-Object -Line | foreach {$_.Lines} #ft -hide
+      changed_when: false
+      register: result_numADusers
+
+    - name: set UID num range variable
+      shell: "{{ LINUXseq }} {{UIDstart}} {{UIDstart + result_numADusers.stdout | int - 1 }}" 
+      with_sequence: start="{{UIDstart}}" count="{{result_numADusers.stdout | int}}"
+      register: result_UIDrange
+      delegate_to: localhost
+
+    - name: Set Group GID for "{{ PriGIDname }}"
+      win_domain_group:
+        name: "{{ PriGIDname }}"
+        attributes:
+          gidNumber: "{{ PriGIDnumber }}"
+
+    - name: "Set AD uidNumber gidNumber"
+      win_domain_user:
+        path: "{{ ADuserOU }}"
+        name: "{{ item[0] }}"
+        attributes:
+          uidNumber: "{{ item[1] }}"
+          gidNumber: "{{ PriGIDnumber }}"
+      with_together:
+        - "{{ result_userADnames.stdout_lines }}"
+        - "{{ result_UIDrange | json_query('results[0].stdout_lines') }}"
+      when: result_UIDrange.changed == true
+      ignore_errors: true
+

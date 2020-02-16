@@ -1,0 +1,34 @@
+- name: Discover AD user without uidNumbers and apply set-ADuser uidNumber
+  hosts: windows
+  gather_facts: no
+  vars:
+    ADuserOU: "CN=Users,DC=kryptolula,DC=local"
+    UIDstart: 10001
+    LINUXseq: "/usr/bin/seq"
+
+  tasks:
+    - name: "Get AD user list"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber | where uidNumber -eq $Null | foreach {$_.Name} 
+      register: result_userADnames
+    - debug:
+        var: result_userADnames
+    
+    - name: "Count AD users without UID"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber | where uidNumber -eq $Null | foreach {$_.Name} | Measure-Object -Line | foreach {$_.Lines} #ft -hide
+      register: result_numADusers
+
+    - name: set UID num range
+      shell: "{{ LINUXseq }} {{UIDstart}} {{UIDstart + result_numADusers.stdout | int - 1 }}" 
+      with_sequence: start="{{UIDstart}}" count="{{result_numADusers.stdout | int}}"
+      register: result_UIDrange
+      delegate_to: localhost
+
+    - name: "Set AD users uidNumber"
+      win_shell: set-aduser -identity "{{ item[0] }}" -add @{ uidNumber="{{ item[1] }}" }
+      with_together:
+        - "{{ result_userADnames.stdout_lines }}"
+        - "{{ result_UIDrange | json_query('results[0].stdout_lines') }}"
+
+
+#################################################################################
+#### for reference: set-aduser -identity Guest -remove @{ uidNumber=7001 } #######

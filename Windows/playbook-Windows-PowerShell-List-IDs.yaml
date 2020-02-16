@@ -1,0 +1,35 @@
+- name: List AD users uidNumber, generate UID from SID and apply to UID to user
+  hosts: windows
+  gather_facts: no
+  vars:
+    ADuserOU: "CN=Users,DC=kryptolula,DC=local"
+    ADgroupOU: "CN=Users,DC=kryptolula,DC=local"
+
+  tasks:
+    - name: "Get AD valid NIX user list"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber,gidNumber | where { ($_.uidNumber -ne $Null -and $_.gidNumber -ne $Null )} | foreach {$_.Name ; $_.uidNumber ; $_.gidNumber} 
+      register: ValidADusers
+ 
+    - debug:
+        msg="{{ ValidADusers.stdout_lines }}"
+
+    - name: "Get AD invalid NIX user list"
+      win_shell: Get-ADUser -Filter * -SearchBase "{{ ADuserOU }}" -Properties uidNumber,gidNumber | where { ($_.uidNumber -eq $Null -or $_.gidNumber -eq $Null )} | foreach {$_.Name } 
+      register: InvalidADusers
+  
+    - debug:
+        msg="{{ InvalidADusers.stdout_lines }}"
+    
+    - name: "Get AD valid NIX group list"
+      win_shell: Get-ADGroup -Filter * -SearchBase "{{ ADgroupOU }}" -Properties gidNumber | where { $_.gidNumber -ne $Null } | foreach {$_.Name ; $_.gidNumber} 
+      register: ValidADgroups
+ 
+    - debug:
+        msg="{{ ValidADgroups.stdout_lines }}"
+
+    - name: "Get AD invalid NIX group list"
+      win_shell: Get-ADGroup -Filter * -SearchBase "{{ ADgroupOU }}" -Properties gidNumber | where { $_.gidNumber -eq $Null } | foreach {$_.Name } 
+      register: InvalidADgroups
+  
+    - debug:
+        msg="{{ InvalidADgroups.stdout_lines }}"

@@ -1,0 +1,5 @@
+- name: Query isilon status
+  hosts: isilon
+
+  roles:
+    - isilonStatus

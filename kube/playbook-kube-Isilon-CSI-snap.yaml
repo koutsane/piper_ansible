@@ -1,0 +1,36 @@
+- name: Perform Kubernetes Isilon CSI PVC snapshot
+  hosts: kube-master0
+  gather_facts: no
+  become: true
+  vars:
+    ############## User Configurable ##################
+    snapAPIversion: "snapshot.storage.k8s.io/v1alpha1"
+    snapClass: "isilon-snapclass"
+    snapSource: "ansibleubuntu01-isi-pvc"
+    snapNAMEspace:  "default"
+    dest: "/root"
+    ###################################################
+    snapName: "snap-{{ snapSource }}"
+    snapYamlFile: "snap-{{ snapSource }}"
+    volumeSnapShotYaml: |
+      apiVersion: "{{ snapAPIversion }}"
+      kind: VolumeSnapshot
+      metadata:
+        name: "{{ snapName }}"
+        namespace: "{{ snapNAMEspace }}"
+      spec:
+        snapshotClassName: "{{ snapClass }}"
+        source:
+          name: "{{ snapSource }}"
+          kind: PersistentVolumeClaim
+  
+  tasks:
+
+    - name: Create yaml VolumeSnapShot file
+      blockinfile:
+        block: "{{ volumeSnapShotYaml }}"
+        create: yes 
+        dest: "{{ dest }}/{{ snapYamlFile }}"
+    
+    - name: Create VolumeSnapshot from "{{ snapSource }}"
+      shell: "kubectl create -f {{ dest }}/{{ snapYamlFile }}"

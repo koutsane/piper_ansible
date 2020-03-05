@@ -6,7 +6,7 @@
     ############## User Configurable ##################
     snapAPIversion: "snapshot.storage.k8s.io/v1alpha1"
     snapClass: "isilon-snapclass"
-    snapSource: "ansibleubuntu01-isi-pvc"
+    snapSource: "centoslight01-isi-pvc"
     snapNAMEspace:  "default"
     dest: "/root"
     ###################################################

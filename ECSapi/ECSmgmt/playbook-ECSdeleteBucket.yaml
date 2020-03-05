@@ -1,0 +1,41 @@
+---
+- name: ECS delete S3 bucket
+  hosts: ECS_TESTDRIVE
+  gather_facts: False
+  vars:
+    username: "<ENTER YOUR USERNAME>"
+    password: "<ENTER YOUR PASSWORD>"
+    ECS_host: "<ENTER ECS IP/HOSTNAME>"
+    BucketName: "<ENTER YOUR BUCKET NAME>"
+
+  tasks:
+
+  - name: Get ECS API authentication token
+    uri:
+      validate_certs: no
+      user: "{{ username }}"
+      password: "{{ password }}"
+      url: https://{{ECS_host}}/login
+      method: GET
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+      return_content: yes
+    register: results_login
+#    no_log: True
+
+  - name: Connect to ECS using a previously stored cookie to delete bucket
+    uri:
+      validate_certs: no
+      url: https://{{ECS_host}}/object/bucket/myAnsibleBucket/deactivate.json
+      method: POST
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        X-SDS-AUTH-TOKEN: "{{ results_login.x_sds_auth_token }}"
+      body_format: json
+      return_content: yes
+    register: results_DeleteBucket
+
+  - debug:
+     msg="{{ results_DeleteBucket }}"

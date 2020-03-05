@@ -1,0 +1,39 @@
+- name: Isilon list SMB shares with ansible URI module
+  hosts: isilon822dc1
+  vars:
+    Isilon_IP: "https://{{ ansible_host }}:8080"
+    Isilon_PAPI_version: "7"
+    isilonuser: "ansible"
+    isilonpass: "ansible"
+    isilonZone: "system"
+
+  tasks:
+    - name: get isilon API session IDs
+      uri:
+        url: "{{ Isilon_IP }}/session/1/session"
+        method: POST
+        validate_certs: no
+        body_format: json
+        body:
+          {
+            username: "{{ isilonuser }}",
+            password: "{{ isilonpass }}",
+            services: ["platform", "namespace"]
+	  }
+        status_code: 201
+      register: results_login
+    
+    - name: List SMB shares
+      uri:
+        url: "{{ Isilon_IP }}/platform/{{ Isilon_PAPI_version }}/protocols/smb/shares?zone={{ isilonZone }}"
+        method: get
+        validate_certs: no
+        headers:
+          Cookie: "isisessid={{ results_login.cookies.isisessid }}"
+          X-CSRF-Token: "{{ results_login.cookies.isicsrf }}"
+          referer: "{{ Isilon_IP }}"
+        body_format: json
+      register: results_shares
+
+    - debug:
+        msg="{{ results_shares }}"

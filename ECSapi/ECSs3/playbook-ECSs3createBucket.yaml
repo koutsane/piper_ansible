@@ -1,0 +1,31 @@
+---
+########## REQUIRES PYTHON3 and BOTO3 #############
+- name: ECS list S3 bucket
+  hosts: ECS_TESTDRIVE
+  gather_facts: False
+  vars:
+    #username: "<ENTER YOUR USERNAME>"
+    username: "131887216500386603@ecstestdrive.emc.com"
+    #password: "<ENTER YOUR PASSWORD>"
+    password: "l9fBa0oZ2NzQAJPDFT00RQsRp4wAhnCxtu+fnsTE"
+    #ECS_host: "<ENTER ECS IP/HOSTNAME>"
+    ECS_host: "object.ecstestdrive.com"
+    #NameSpace: ns1
+
+  tasks:
+  
+    - name: Connect to ECS list S3 buckets
+      aws_s3:
+        bucket: ansible_aws_s3_bucket
+        mode: create
+        permission: public-read
+        s3_url: https://{{ ECS_host }}/
+        validate_certs: yes
+        encrypt: yes
+        rgw: true
+        aws_access_key: "{{ username }}"
+        aws_secret_key: "{{ password }}"
+      register: results_ListBucket
+
+    - debug:
+        msg="{{ results_ListBucket }}"

@@ -1,0 +1,10 @@
+apiVersion: snapshot.storage.k8s.io/v1alpha1
+kind: VolumeSnapshot
+metadata:
+ name: ansibleubuntu01-snap1
+ namespace: default
+spec:
+ snapshotClassName: isilon-snapclass
+ source:
+   name: ansibleubuntu01-isi-pvc
+   kind: PersistentVolumeClaim

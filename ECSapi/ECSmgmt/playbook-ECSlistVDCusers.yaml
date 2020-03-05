@@ -1,0 +1,39 @@
+---
+- name: ECS list VDC management users
+  hosts: localhost
+  gather_facts: False
+  vars:
+    username: ansible
+    password: password01
+    ECS_host: 192.168.11.111
+
+  tasks:
+
+  - name: test ECS API basic authentication
+    uri:
+      validate_certs: no
+      user: "{{ username }}"
+      password: "{{ password }}"
+      url: https://{{ECS_host}}:4443/login
+      method: GET
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+      return_content: yes
+    register: results_login
+    no_log: True
+
+  - name: Connect to website using a previously stored cookie to create new buckets
+    uri:
+      validate_certs: no
+      url: https://{{ECS_host}}:4443/vdc/users
+      method: GET
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        X-SDS-AUTH-TOKEN: "{{ results_login.x_sds_auth_token }}"
+      return_content: yes
+    register: results_vdcMGMTusers
+
+  - debug:
+     msg="{{ results_vdcMGMTusers }}"

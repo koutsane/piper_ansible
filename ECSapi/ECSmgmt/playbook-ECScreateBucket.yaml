@@ -1,0 +1,52 @@
+---
+- name: ECS create new S3 bucket
+  hosts: ECS_TESTDRIVE
+  gather_facts: False
+  vars:
+    username: "<ENTER YOUR USERNAME>"
+    password: "<ENTER YOUR PASSWORD>"
+    ECS_host: "<ENTER ECS IP/HOSTNAME>"
+    bucketOwner: "<ENTER ECS S3 BUCKET OWNER>"
+
+    BucketName: myAnsibleBucket
+    NameSpace: ns1
+
+  tasks:
+
+  - name: Get ECS API authentication token
+    uri:
+      validate_certs: no
+      user: "{{ username }}"
+      password: "{{ password }}"
+      url: https://{{ECS_host}}/login
+      method: GET
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+      return_content: yes
+    register: results_login
+#    no_log: True
+
+  - name: Connect to ECS using a previously stored cookie to create new buckets
+    uri:
+      validate_certs: no
+      url: https://{{ECS_host}}/object/bucket.json
+      method: POST
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        X-SDS-AUTH-TOKEN: "{{ results_login.x_sds_auth_token }}"
+      body_format: json
+      body:
+        {
+          "name": "{{ BucketName }}",
+          "owner": "{{ bucketOwner }}",
+          "filesystem_enabled": "false",
+          "head_type": "s3",
+          "retention": "3",
+        }
+      return_content: yes
+    register: results_CreateBucket
+
+  - debug:
+     msg="{{ results_CreateBucket }}"

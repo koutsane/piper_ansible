@@ -12,7 +12,6 @@
     PriGIDname: Domain Users
     PriGIDnumber: 7001
     LINUXseq: "/usr/bin/seq"
-    ignoreUser: krbtgt
 
   tasks:
     - name: "Get AD user list"

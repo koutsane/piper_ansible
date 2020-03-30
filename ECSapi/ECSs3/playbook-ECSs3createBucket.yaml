@@ -5,12 +5,8 @@
   gather_facts: False
   vars:
     #username: "<ENTER YOUR USERNAME>"
-    username: "131887216500386603@ecstestdrive.emc.com"
     #password: "<ENTER YOUR PASSWORD>"
-    password: "l9fBa0oZ2NzQAJPDFT00RQsRp4wAhnCxtu+fnsTE"
     #ECS_host: "<ENTER ECS IP/HOSTNAME>"
-    ECS_host: "object.ecstestdrive.com"
-    #NameSpace: ns1
 
   tasks:
   

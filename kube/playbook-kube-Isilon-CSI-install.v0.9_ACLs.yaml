@@ -1,0 +1,452 @@
+---
+#############################################################################################################
+# Author: Evan Koutsandreou
+# email: evan.koutsandreou@dell.com
+# version 0.8
+# Notes: Ansible playbook tested for Isilon CSI version 1.0 on RHEL75 with Kubernetes 1.14.9.
+# Known Issues and workarounds:
+#   1) In order to automate the entire installation, it was necessary to disable the feature gate verify
+#      script within the install.isilon script. This is done automatically by this playbook.
+#      Howvever I have included a variable which can be used to enable or disabke the feature gate verify
+#      (see FeatureGateVerify, default is "no" for this ansible playbook)
+#   2) Due to a timing issue in the isilon.script, the "kubeclt create -f volumesnapclass" command may fail as
+#      the isilon CSI pods are not in a running state. I have implemented a workaround which waits for these pods
+#      to be active / running.
+#
+# Change log:
+#   0.1 - Initial Release
+#   0.2 - Uncommented AZserviceIP added Isilon Smartconnect Service IP to use smartconnect Load Balancing
+#       - Added Isilon create CSI user and role tasks to first play
+#       - updated wait loop to ansible module
+#       - added variables to disable downloading of new helm package and git packages
+#   0.3 - Fixed issue with tiller pod not found during install.isilon script execution on SLOW servers
+#       - Fixed issue with until loop success condition
+#   0.4 - Changed "enableQuota" to "true"
+#       - Tested with elevated permissions "become: true", the get_helm.sh path need to be in sudoers file 
+#         also changed "become" to "true"
+#       - added default option to remove isilon acls from csi path as ACLs (windows) will cause permission errors
+#       - changed default csi path from /ifs/data/csi to /ifs/kube/csi
+#   0.5 - Added variable substitions for Isilon_csi_data_path
+#       - fixed issue where the volumesnapshotclass.yaml file was not updated with isiPath
+#   0.6 - fix for double quotes in help yaml files 
+#   0.7 - Increased support windows ACL support for Isilon CSI path
+#   0.8 - Fixed Isilon POSIX create CSI path, removed owner and removed "backslash" from POSIX group
+#       - Changed default Isilon CSI path to use POSIX permissions, change as required
+#         Varables modified:
+#           Isilon_csi_RemoveACLs: "yes"
+#           Isilon_csi_posix_mode: "0777"
+#   0.9 - Added delay for pods to start
+#       - Changed default back to ACLs
+#
+#
+# Dell believes the information in this publication is accurate as of its publication date. The information
+# is subject to change without notice.
+# THE INFORMATION IN THIS PUBLICATION IS PROVIDED “AS-IS.” DELL MAKES NO REPRESENTATIONS OR WARRANTIES OF ANY KIND
+# WITH RESPECT TO THE INFORMATION IN THIS PUBLICATION, AND SPECIFICALLY DISCLAIMS IMPLIED WARRANTIES OF
+# MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. USE, COPYING, AND DISTRIBUTION OF ANY DELL SOFTWARE DESCRIBED
+# IN THIS PUBLICATION REQUIRES AN APPLICABLE SOFTWARE LICENSE.
+#
+- name: "Prepare CSI k8s path on Dell EMC Isilon"
+  hosts:
+    #- isilon82DC1  ### This is your intended CSI enabled isilon cluster node (Ansible target host)
+    - isilon822dc1  ### This is your intended CSI enabled isilon cluster node (Ansible target host)
+  vars:
+    Isilon_csi_dataPath: "/ifs/kube/csi" ## WARNING make sure tbis variable value is consistent across playbook
+    Isilon_csi_user: "csi" ### Set CSI driver Isilon user name
+    Isilon_csi_password: "password01" ### Set CSI Driver Isilon user password
+    Isilon_csi_posix_group: 'Isilon Users' ## SINGLE QUOTES # Set CSI Driver path group ## don't for get back slash spaces ###
+    Isilon_csi_acls_group: 'kryptolula\\domain\ users' ## SINGLE QUOTES ## Only applies if Isilon_csi_RemoveACLs is set to "no" ###
+    Isilon_csi_authProvider: "local"
+    Isilon_csi_posix_mode: "0777" ### change this value "POSIX mode" to suit your security requirements
+    Isilon_csi_acls_mode: "0755" ### change this value for windows path ACLs to suit your security requirements
+    Isilon_Win_ACLs: "allow dir_gen_all,object_inherit,container_inherit" ### Add isilon Win ACLs to CSI user and Isilon_csi_acls_group
+    Isilon_csi_RemoveACLs: "no" ### removes windows ACLs for POSIX only permissions, change to "no" if you want to support windows ACLs
+    Isilon_csi_role: "csi_role"
+    Isilon_csi_zone: "system" ### System zone is requires for CSI version 1.0
+  gather_facts: no
+
+  tasks:
+
+    - name: "check for isilon csi user"
+      shell: "isi auth users view {{ Isilon_csi_user }} --zone {{ Isilon_csi_zone }}"
+      register: csiuser_results
+      failed_when: false
+      changed_when: csiuser_results.rc != 0
+      notify: isilon_create_user
+
+    - name: "check for isilon csi role"
+      shell: "isi auth roles view {{ Isilon_csi_role }}"
+      register: csirole_results
+      failed_when: false
+      changed_when: csirole_results.rc != 0
+      notify: isilon_create_role
+    
+    - name: "Creating Isilon User and Role for CSI driver functionality"
+      meta: flush_handlers
+
+    - name: "Create isilon k8s CSI paths for POSIX permissons on {{ inventory_hostname }}"
+      file:
+        state: directory
+        dest: "{{ Isilon_csi_dataPath }}"
+        recurse: yes
+        mode: "{{ Isilon_csi_posix_mode }}"
+        #owner: '{{ Isilon_csi_user }}'
+        group: "{{ Isilon_csi_posix_group }}"
+      notify: csi_remove_acls
+      when: Isilon_csi_RemoveACLs == "yes"
+    
+    - name: "Create isilon k8s CSI path for Windows ACLs on {{ inventory_hostname }}"
+      file:
+        state: directory
+        dest: "{{ Isilon_csi_dataPath }}"
+        recurse: yes
+        mode: "{{ Isilon_csi_acls_mode }}"
+      notify: csi_add_acls
+      when: Isilon_csi_RemoveACLs == "no"
+    
+    - name: "Applying Isilon User and Group permissions to CSI path"
+      meta: flush_handlers
+
+      #- pause: ### Check isilon permissions
+
+  handlers:
+
+    - name: isilon_create_user
+      shell: "isi auth users create --zone {{ Isilon_csi_zone }} --provider {{ Isilon_csi_authProvider }} --password {{ Isilon_csi_password }} {{ Isilon_csi_user }}"
+      register: isi_user_results
+      no_log: true
+
+    - name: isilon_create_role
+      shell: "isi auth roles create --zone {{ Isilon_csi_zone }} --name {{ Isilon_csi_role }}"
+      notify: isilon_role_priv
+
+    - name: isilon_role_priv
+      shell: "isi auth roles modify {{ Isilon_csi_role }} --zone {{ Isilon_csi_zone }} --add-priv ISI_PRIV_LOGIN_PAPI,ISI_PRIV_NFS,ISI_PRIV_QUOTA,ISI_PRIV_SNAPSHOT,ISI_PRIV_IFS_RESTORE,ISI_PRIV_NS_IFS_ACCESS"
+      notify: isilon_add_csi_role_member
+
+    - name: isilon_add_csi_role_member
+      shell: "isi auth roles modify {{ Isilon_csi_role }} --zone {{ Isilon_csi_zone }} --add-user {{ Isilon_csi_user }}"
+
+    - name: csi_remove_acls
+      shell: "chmod -b {{ Isilon_csi_posix_mode }} {{ Isilon_csi_dataPath }}"
+      args:
+        warn: no
+      when: Isilon_csi_RemoveACLs == "yes"
+    
+    - name: csi_add_acls
+      shell: | 
+        chmod -R +a user {{ Isilon_csi_user }} {{ Isilon_Win_ACLs }} {{ Isilon_csi_dataPath }} && \
+        chmod -R +a group {{ Isilon_csi_acls_group }} {{ Isilon_Win_ACLs }} {{ Isilon_csi_dataPath }} && \
+        chmod -R -a everyone allow dir_gen_all,dir_gen_read,dir_gen_write,dir_gen_execute,std_write_dac,delete_child {{ Isilon_csi_dataPath }}
+      args:
+        warn: no
+      when: Isilon_csi_RemoveACLs == "no"
+### END Prepare isilon Play ####
+
+
+##########################################################################
+### Prepare, configure and install Isilon CSI driver on kubernetes k8s ###
+
+- name: Install Dell EMC Isilon CSI on K8s
+  hosts: kube-master0_21
+  become: true ### Become true required the "GetHelm_Path" path to be set in sudoers file
+  vars:
+    kube_master_node: "kube-master0_21" #### PLEASE SET THIS TO YOUR KUBERNETES MASTER NODE ####
+    Isilon_csi_dataPath: "/ifs/kube/csi" ## WARNING set "isiPath" variable to the same path
+    Download_git: "yes"
+    Download_helm: "yes"
+    GetHelm_Path: "/usr/local/bin" # if become used, then add to secure path defaults in sudoers file
+    IsilonCSIpath: "/root"
+    IsilonUser: "Y3Np" ### create base64 hash using: echo -n 'yournamehere' | base64
+    IsilonPass: "cGFzc3dvcmQwMQ=="  ###### create base64 hash using: echo -n 'password' | base64
+    WaitTime: "10"
+    TillerAccount: "rbac-config.yaml"
+    TestNS: "test" ### Kubernetes namespace name for testing isilon CSI driver functions
+    MyIsilonValues: | ### Isilon CSI Driver attributes 
+      isiIP: 192.168.21.141
+      isiPort: "8080"
+      isiInsecure: "true"
+      isiAccessZone: "System"
+      volumeNamePrefix: k8s
+      controllerCount: 1
+      enableDebug: "true"
+      verbose: "false"
+      enableQuota: "true"
+      noProbeOnStart: "false"
+      isiPath: "{{ Isilon_csi_dataPath }}"
+      autoProbe: "true"
+      nfsV3: "false"
+      storageClass:
+        name: isilon ### Change this if you want change the isilon storage class name to be different
+        isDefault: "true"
+        reclaimPolicy: Delete
+        accessZone: System
+        isiPath: "{{ Isilon_csi_dataPath }}" # default path for volumes created, this is used if a storage class does not have IsiPath parameter specified
+        AzServiceIP : 192.168.21.140 #change if service IP different from isiIP, must be set to the SmartConnect serviceIP for Isilon load balancing
+      images:
+        driver: dellemc/csi-isilon:v1.0.0
+        attacher: quay.io/k8scsi/csi-attacher:v1.1.1
+        provisioner: quay.io/k8scsi/csi-provisioner:v1.2.1
+        snapshotter: quay.io/k8scsi/csi-snapshotter:v1.2.0
+        registrar: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+    # Added "FeatureGateVerify" to make testing different feature gate options with easy different versions of kubernetes
+    FeatureGateVerify: "no"
+    FeatureGateConfigFile: |
+      VolumeSnapshotDataSource: true
+      KubeletPluginsWatcher: true
+      CSINodeInfo: true
+      CSIDriverRegistry: true
+    FeatureGates: "--feature-gates=VolumeSnapshotDataSource=true,KubeletPluginsWatcher=true,CSINodeInfo=true,CSIDriverRegistry=true"
+    KubeTillerAccount: |
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: tiller
+        namespace: kube-system
+      ---
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: tiller
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+      subjects:
+        - kind: ServiceAccount
+          name: tiller
+          namespace: kube-system
+  gather_facts: no
+
+  tasks:
+
+    - name: Add feature gate options and attributes in /var/lib/kubelet/config.yaml
+      blockinfile:
+        path: /var/lib/kubelet/config.yaml
+        insertafter: EOF
+        block: "{{ FeatureGateConfigFile }}"
+
+    - name: Kube Master enable feature gates attributes to /etc/kubernetes/manifests/kube-apiserver.yaml
+      blockinfile:
+        path: /etc/kubernetes/manifests/kube-apiserver.yaml
+        insertafter: "    - --tls-private-key-file"
+        block: "    - {{ FeatureGates }}"
+      when: inventory_hostname == kube_master_node
+
+    - name: Kube Master enable feature gates attributes to /etc/kubernetes/manifests/kube-controller-manager.yaml
+      blockinfile:
+        path: /etc/kubernetes/manifests/kube-controller-manager.yaml
+        insertafter: "    - --use-service-account-credentials"
+        block: "    - {{ FeatureGates }}"
+        #This was set by Anjan in his document: ,BlockVolume=true,CSIBlockVolume=true
+      when: inventory_hostname == kube_master_node
+
+    - name: Kube Master enable feature gates attributes to /etc/kubernetes/manifests/kube-scheduler.yaml
+      blockinfile:
+        path: /etc/kubernetes/manifests/kube-scheduler.yaml
+        insertafter: "    - --leader-elect"
+        block: "    - {{ FeatureGates }}"
+      when: inventory_hostname == kube_master_node
+
+    - name: All nodes modify environment variable KUBELET_KUBECONFIG_ARGS /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+      lineinfile:
+        path: /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+        regexp: "KUBELET_KUBECONFIG_ARGS="
+        line: "Environment=\"KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf {{ FeatureGates }}\""
+
+    - name: Restart kubelet services on all nodes
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: kubelet
+
+    - name: "Wait for kubelet services to restart...checking \"kubectl -n kube-system get pods\""
+      shell: "kubectl -n kube-system get pods"
+      register: wait_kubelet_result
+      until: "'ContainerCreating' not in wait_kubelet_result.stdout"
+      retries: 1800
+      delay: 5
+      changed_when: false
+      when: inventory_hostname == kube_master_node
+
+    - name: Configure the mount propagation in Docker
+      blockinfile:
+        path: /etc/systemd/system/multi-user.target.wants/docker.service
+        insertafter: "Restart="
+        block: "MountFlags=shared"
+
+    - name: Restart Docker services on all nodes
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: docker
+
+    - name: "Wait {{ WaitTime }} secs for docker services to restart"
+      shell: "sleep {{ WaitTime }}"
+      changed_when: false
+      when: inventory_hostname == kube_master_node
+
+    - name: Download Helm and make read write executable
+      get_url:
+        url:  https://raw.githubusercontent.com/helm/helm/master/scripts/get
+        dest: "{{ GetHelm_Path }}/get_helm.sh"
+        mode: u+rwx
+      when: inventory_hostname == kube_master_node and Download_helm == "yes"
+
+    - name: Setup Helm
+      shell: "{{ GetHelm_Path }}/get_helm.sh"
+      when: inventory_hostname == kube_master_node
+
+    - name: Execute Helm Init
+      shell: "{{ GetHelm_Path }}/helm init"
+      when: inventory_hostname == kube_master_node
+
+    - name: copy service account for Tiller
+      blockinfile:
+        path: "{{ GetHelm_Path }}/{{ TillerAccount }}"
+        block: "{{ KubeTillerAccount }}"
+        create: yes
+      when: inventory_hostname == kube_master_node
+
+    - name: Add Tiller services account to kube
+      shell: "kubectl get pods -A | grep tiller | grep -i running || kubectl create -f {{ GetHelm_Path }}/{{ TillerAccount }}"
+      register: KubetillerService_results
+      changed_when: "'tiller created' in KubetillerService_results.stdout"
+      when: inventory_hostname == kube_master_node
+
+    - name: Create or upgrade service account for Tiller
+      shell: "helm init --upgrade --service-account tiller"
+      register: HelmtillerService_results
+      changed_when: "'$HELM_HOME has been configured at' in HelmtillerService_results.stdout"
+      when: inventory_hostname == kube_master_node
+
+    - name: Add kube isilon namespace for Dell EMC Isilon
+      shell: "kubectl get namespace | grep isilon | grep -i active || kubectl create namespace isilon"
+      register: KubetIsilonNS_results
+      changed_when: "'isilon created' in KubetIsilonNS_results.stdout"
+      when: inventory_hostname == kube_master_node
+
+    - name: Add kube namespace for testing Isilon
+      shell: "kubectl get namespace | grep {{ TestNS }} | grep -i active || kubectl create namespace {{ TestNS }}"
+      register: KubetTESTisilonNS_results
+      changed_when: "' created' in KubetTESTisilonNS_results.stdout"
+      when: inventory_hostname == kube_master_node
+
+    - name: Create directory for github CSI download
+      file:
+        state: directory
+        dest: "{{ IsilonCSIpath }}/IsilonCSI"
+      when: inventory_hostname == kube_master_node
+
+    - name: Get Isilon CSI from github
+      git:
+        repo: https://github.com/dell/csi-isilon.git
+        dest: "{{ IsilonCSIpath }}/CSI-Isilon"
+        force: yes
+      when: inventory_hostname == kube_master_node and Download_git == "yes"
+
+    - name: "Add isilon username to helm secrets file {{ IsilonCSIpath }}/CSI-Isilon/csi-isilon/helm/secret.yaml"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/secret.yaml"
+        regexp: "  username:"
+        line: "  username: {{ IsilonUser }}"
+      when: inventory_hostname == kube_master_node
+
+    - name: "Add isilon password to helm secrets file {{ IsilonCSIpath }}/CSI-Isilon/csi-isilon/helm/secret.yaml"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/secret.yaml"
+        regexp: "  password:"
+        line: "  password: {{ IsilonPass }}"
+      when: inventory_hostname == kube_master_node
+
+    - name: Add isilon credentials from secret.yaml file
+      shell: "kubectl get secrets -A | grep isilon-creds || kubectl create -f {{ IsilonCSIpath }}/CSI-Isilon/helm/secret.yaml"
+      register: IsilonCreds_results
+      changed_when: "'isilon-creds created' in IsilonCreds_results.stdout"
+      when: inventory_hostname == kube_master_node
+
+    - name: "create {{ IsilonCSIpath }}/CSI-Isilon/helm/myvalues.yaml for Isilon k8s configuration"
+      blockinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/myvalues.yaml"
+        block: "{{ MyIsilonValues }}"
+        create: yes
+      when: inventory_hostname == kube_master_node
+
+    - name: "Disable install.isilon kubernetes verification check in {{ IsilonCSIpath }}/CSI-Isilon/helm/install.isilon"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/install.isilon"
+        regexp: "sh ./verify.kubernetes"
+        line: "### Disabled by ansible ### sh ./verify.kubernetes"
+      when: inventory_hostname == kube_master_node and FeatureGateVerify == "no"
+
+    - name: "Disable install.isilon kubernetes verification return code"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/install.isilon"
+        regexp: "^rc="
+        line: "rc=1"
+      when: inventory_hostname == kube_master_node and FeatureGateVerify == "no"
+
+    - name: |
+        "Disable check for volumesnapshotclass in install.isilon script as Isilon CSI containers may not be running,"
+        "an attempt will be made at the end of this play"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/install.isilon"
+        regexp: "kubectl get volumesnapshotclass"
+        line: "echo run this command after install completes: kubectl create -f {{ IsilonCSIpath }}/CSI-Isilon/helm/volumesnapshotclass.yaml"
+      when: inventory_hostname == kube_master_node
+
+    - name: Delay installation for "{{ WaitTime }}" seconds, allow enough time for all pods to start
+      shell: "sleep {{WaitTime }}"
+      when: inventory_hostname == kube_master_node
+    
+    - name: "Wait until Tiller pods in \"kubectl -n kube-system get pods\" are running..."
+      shell: "kubectl -n kube-system get pods"
+      register: wait_tiller_result
+      until: "'ContainerCreating' not in wait_tiller_result.stdout"
+      retries: 1800
+      delay: 5
+      changed_when: false
+      when: inventory_hostname == kube_master_node
+    
+    - name: "Wait for isilon namespace API group service running - required for slow systems"
+      shell: "kubectl -n kube-system get pods"
+      register: wait_api_result
+      until: "'ContainerCreating' not in wait_api_result.stdout"
+      retries: 1800
+      delay: 5
+      changed_when: false
+      when: inventory_hostname == kube_master_node
+
+    - name: "Finalise installation and run csi-isilon setup script {{ IsilonCSIpath }}/CSI-Isilon/helm/install.isilon"
+      shell: "cd {{ IsilonCSIpath }}/CSI-Isilon/helm/ && ./install.isilon"
+      register: installation_result
+      when: inventory_hostname == kube_master_node
+    
+    - debug:
+        var: installation_result
+      when: inventory_hostname == kube_master_node
+    
+    - name: |
+        "Wait until isilon CSI pods have been created. This took up to 10 mins in my virtual lab Please be patient..."
+        "Maximum wait set to 30mins"
+      shell: "kubectl -n isilon get pods"
+      register: wait_result
+      until: "'ContainerCreating' not in wait_result.stdout"
+      retries: 1800
+      delay: 10
+      changed_when: false
+      when: inventory_hostname == kube_master_node
+    
+    - name: "add isilon csi path to volumesnapshotclass.yaml"
+      lineinfile:
+        path: "{{ IsilonCSIpath }}/CSI-Isilon/helm/volumesnapshotclass.yaml"
+        regexp: "  IsiPath: "
+        line: "  IsiPath: \"{{ Isilon_csi_dataPath }}\""
+      when: inventory_hostname == kube_master_node
+
+    - name: "Add volumesnapshotclass from file {{ IsilonCSIpath }}/CSI-Isilon/helm/volumesnapshotclass.yaml"
+      shell: "kubectl get volumesnapshotclass | grep isilon-snapclass || kubectl create -f {{ IsilonCSIpath }}/CSI-Isilon/helm/volumesnapshotclass.yaml"
+      register: IsilonSnapVolClass_results
+      changed_when: "'isilon-snapclass created' in IsilonSnapVolClass_results.stdout"
+      when: inventory_hostname == kube_master_node
+

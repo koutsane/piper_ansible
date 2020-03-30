@@ -2,7 +2,7 @@
 #############################################################################################################
 # Author: Evan Koutsandreou
 # email: evan.koutsandreou@dell.com
-# version 0.8
+# version 0.9
 # Notes: Ansible playbook tested for Isilon CSI version 1.0 on RHEL75 with Kubernetes 1.14.9.
 # Known Issues and workarounds:
 #   1) In order to automate the entire installation, it was necessary to disable the feature gate verify
@@ -169,7 +169,7 @@
       isiAccessZone: "System"
       volumeNamePrefix: k8s
       controllerCount: 1
-      enableDebug: "true"
+      enableDebug: "false"
       verbose: "false"
       enableQuota: "true"
       noProbeOnStart: "false"

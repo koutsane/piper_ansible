@@ -1,11 +1,11 @@
 ---
-- name: ECS create new S3 bucket
-  hosts: ECS_TESTDRIVE
+- name: ECS create new S3 bucket with management API
+  hosts: Dell_EMC_ECS
   gather_facts: False
   vars:
-    username: "<ENTER YOUR USERNAME>"
-    password: "<ENTER YOUR PASSWORD>"
-    ECS_host: "<ENTER ECS IP/HOSTNAME>"
+    username: "<ENTER USER NAME>"
+    password: "<ENTER YOUR SECRET KEY>"
+    ECS_host: "<ECS IP ADDRESS or HOSTNAME:PORT>"
     bucketOwner: "<ENTER ECS S3 BUCKET OWNER>"
 
     BucketName: myAnsibleBucket
@@ -27,7 +27,7 @@
     register: results_login
 #    no_log: True
 
-  - name: Connect to ECS using a previously stored cookie to create new buckets
+  - name: Connect to ECS | create new bucket {{ BucketName }}
     uri:
       validate_certs: no
       url: https://{{ECS_host}}/object/bucket.json

@@ -1,13 +1,9 @@
-- name: Isilon New SMB share with ansible URI module
+- name: Isilon - test API access via get session token
   hosts: isilon
   vars:
     Isilon_IP: "https://{{ ansible_host }}:8080"
     isilonuser: "ansible"
     isilonpass: "ansible"
-    sharename: "API SMB Ansible Share"
-    sharepath: /ifs/data/Ansible
-    sharedescr: "Share Created by Ansible Core Isilon API playbook"
-    domaingrp: "KRYPTOLULA\\domain users"
 
   tasks:
     - name: get isilon API session IDs
@@ -23,7 +19,22 @@
             services: ["platform", "namespace"]
 	  }
         status_code: 201
+      register: results_login
+    
+    - debug:
+        msg="{{ results_login }}"
    
- 
-    - name: make SMB share
+    - name: Delete isilon API session IDs
       uri:
+        url: "{{ Isilon_IP }}/session/1/session"
+        method: DELETE
+        validate_certs: no
+        headers:
+          Cookie: "isisessid={{ results_login.cookies.isisessid }}"
+          X-CSRF-Token: "{{ results_login.cookies.isicsrf }}"
+          referer: "{{ Isilon_IP }}"
+        status_code: 204
+      register: results_DEL_cookie
+    
+    - debug:
+        msg="{{ results_DEL_cookie }}"

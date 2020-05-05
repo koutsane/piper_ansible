@@ -1,0 +1,2 @@
+curl -L --location-trusted -k https://10.64.253.161:4443/login?using-cookies=true -u "ecsvideo:password" -c cookiefile -v
+curl -k https://10.64.253.161:4443/object/namespaces/namespace/ansible_ns -H "Content-Type: application/json" -H "Accept:application/json" -b cookiefile | jq

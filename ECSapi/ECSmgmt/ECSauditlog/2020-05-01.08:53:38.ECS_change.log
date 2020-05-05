@@ -1,0 +1,149 @@
+[
+    [
+        "https://10.64.253.161:4443/vdc/nodes",
+        {
+            "node": [
+                {
+                    "data2_ip": "10.64.253.161",
+                    "data_ip": "10.64.253.161",
+                    "geo_ip": "10.64.253.161",
+                    "ip": "10.64.253.161",
+                    "isLocal": true,
+                    "mgmt_ip": "10.64.253.161",
+                    "nodeid": "758098a4-0fdc-445b-916c-f1a549606505",
+                    "nodename": "lsc-ecs1.ecs.test",
+                    "private_ip": "169.254.1.1",
+                    "rackId": "red",
+                    "version": "3.4.0.1.114057.7141f5539d0.5"
+                },
+                {
+                    "data2_ip": "10.64.253.162",
+                    "data_ip": "10.64.253.162",
+                    "geo_ip": "10.64.253.162",
+                    "ip": "10.64.253.162",
+                    "isLocal": false,
+                    "mgmt_ip": "10.64.253.162",
+                    "nodeid": "951bd8bb-79fe-42c7-99c7-447fe8f8387b",
+                    "nodename": "lsc-ecs2.ecs.test",
+                    "private_ip": "169.254.1.2",
+                    "rackId": "red",
+                    "version": "3.4.0.1.114057.7141f5539d0.5"
+                },
+                {
+                    "data2_ip": "10.64.253.163",
+                    "data_ip": "10.64.253.163",
+                    "geo_ip": "10.64.253.163",
+                    "ip": "10.64.253.163",
+                    "isLocal": false,
+                    "mgmt_ip": "10.64.253.163",
+                    "nodeid": "96860819-738b-4bb3-bef2-355b8d9de3ff",
+                    "nodename": "lsc-ecs3.ecs.test",
+                    "private_ip": "169.254.1.3",
+                    "rackId": "red",
+                    "version": "3.4.0.1.114057.7141f5539d0.5"
+                },
+                {
+                    "data2_ip": "10.64.253.164",
+                    "data_ip": "10.64.253.164",
+                    "geo_ip": "10.64.253.164",
+                    "ip": "10.64.253.164",
+                    "isLocal": false,
+                    "mgmt_ip": "10.64.253.164",
+                    "nodeid": "a03f6330-f8f9-4878-b1bc-f11fddb0b948",
+                    "nodename": "lsc-ecs4.ecs.test",
+                    "private_ip": "169.254.1.4",
+                    "rackId": "red",
+                    "version": "3.4.0.1.114057.7141f5539d0.5"
+                }
+            ]
+        }
+    ],
+    [
+        "https://10.64.253.161:4443/object/bucket?namespace=ansible_ns",
+        {
+            "Filter": "namespace=ansible_ns&name=*",
+            "object_bucket": [
+                {
+                    "TagSet": [],
+                    "api_type": "S3",
+                    "audit_delete_expiration": -2,
+                    "auto_commit_period": 0,
+                    "block_size": -1,
+                    "created": "2020-04-30T22:41:08.089Z",
+                    "default_group_dir_execute_permission": false,
+                    "default_group_dir_read_permission": false,
+                    "default_group_dir_write_permission": false,
+                    "default_group_file_execute_permission": false,
+                    "default_group_file_read_permission": false,
+                    "default_group_file_write_permission": false,
+                    "default_retention": 0,
+                    "fs_access_enabled": false,
+                    "id": "ansible_ns.ansible_aws_s3_bucket",
+                    "is_encryption_enabled": "false",
+                    "is_stale_allowed": false,
+                    "is_tso_read_only": false,
+                    "link": {
+                        "href": "/object/bucket/ansible_ns.ansible_aws_s3_bucket",
+                        "rel": "self"
+                    },
+                    "locked": false,
+                    "min_max_governor": {
+                        "enforce_retention": false
+                    },
+                    "name": "ansible_aws_s3_bucket",
+                    "namespace": "ansible_ns",
+                    "notification_size": -1,
+                    "owner": "ansible_user",
+                    "retention": 0,
+                    "search_metadata": {
+                        "isEnabled": false,
+                        "maxKeys": 0,
+                        "metadata": []
+                    },
+                    "softquota": "-1",
+                    "vpool": "urn:storageos:ReplicationGroupInfo:ec0d2999-ef3e-489b-9465-786c446434a8:global"
+                },
+                {
+                    "TagSet": [],
+                    "api_type": "S3",
+                    "audit_delete_expiration": -2,
+                    "auto_commit_period": 0,
+                    "block_size": -1,
+                    "created": "2020-04-30T22:52:14.692Z",
+                    "default_group_dir_execute_permission": false,
+                    "default_group_dir_read_permission": false,
+                    "default_group_dir_write_permission": false,
+                    "default_group_file_execute_permission": false,
+                    "default_group_file_read_permission": false,
+                    "default_group_file_write_permission": false,
+                    "default_retention": 0,
+                    "fs_access_enabled": false,
+                    "id": "ansible_ns.ansible_aws_s3_bucket2",
+                    "is_encryption_enabled": "false",
+                    "is_stale_allowed": false,
+                    "is_tso_read_only": false,
+                    "link": {
+                        "href": "/object/bucket/ansible_ns.ansible_aws_s3_bucket2",
+                        "rel": "self"
+                    },
+                    "locked": false,
+                    "min_max_governor": {
+                        "enforce_retention": false
+                    },
+                    "name": "ansible_aws_s3_bucket2",
+                    "namespace": "ansible_ns",
+                    "notification_size": -1,
+                    "owner": "ansible_user",
+                    "retention": 0,
+                    "search_metadata": {
+                        "isEnabled": false,
+                        "maxKeys": 0,
+                        "metadata": []
+                    },
+                    "softquota": "-1",
+                    "vpool": "urn:storageos:ReplicationGroupInfo:ec0d2999-ef3e-489b-9465-786c446434a8:global"
+                }
+            ]
+        }
+    ]
+]

@@ -1,13 +1,14 @@
 ---
 - name: check configuration and warn on change
-  hosts: ECS_TESTDRIVE
-  gather_facts: yes
+  hosts: Dell_EMC_ECS
+  gather_facts: yes ### USED TO GET LOCAL DATE AND TIME ###
   vars:
+    username: "<ENTER USER NAME>"
+    password: "<ENTER YOUR SECRET KEY>"
+    ECS_host: "<ECS IP ADDRESS or HOSTNAME:PORT>"
+    nameSpace: "<ENTER YOUR ECS NAMESPACE>"
     DateTimeStamp: "{{ansible_date_time.date}}.{{ansible_date_time.time}}"
-    username: "<ENTER YOUR USERNAME>"
-    password: "<ENTER YOUR PASSWORD>"
-    ECS_host: "<ENTER ECS IP/HOSTNAME>"
-    LogDir: ~/ECSauditlog/
+    LogDir: ./ECSauditlog/ ### Example log destination ###
     ECSPrevState: "{{LogDir}}playbook-ECSauditConfig_Example.prev"
 
   tasks:
@@ -38,9 +39,8 @@
           X-SDS-AUTH-TOKEN: "{{ results_login.x_sds_auth_token }}"
         return_content: no
       with_items:
-        - https://{{ECS_host}}/vdc/nodes
-        - https://{{ECS_host}}/feature/ServerSideEncryption
-        - https://{{ECS_host}}/object/bucket
+        - "https://{{ECS_host}}/vdc/nodes"
+        - "https://{{ECS_host}}/object/bucket?namespace={{ nameSpace }}"
       register: results_CCA
     
     - name: Save ECS API query item and json output to new fact
